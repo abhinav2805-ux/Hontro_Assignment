@@ -1,0 +1,14 @@
+.env
+node_modules
+package-lock.json
+server.log
+.env.example
+.DS_Store
+.idea
+.vscode
+.env.example
+.env.example
+.env
+node_modules
+package-lock.json
+server.log
