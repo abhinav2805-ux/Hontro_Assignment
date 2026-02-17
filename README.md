@@ -433,5 +433,4 @@ Use these to demonstrate the **two‑window real‑time test**:
 
 ---
 
-This README, together with the codebase, should satisfy the assignment’s **functional requirements, technical requirements, and documentation deliverables**, and is ready for submission.
 
