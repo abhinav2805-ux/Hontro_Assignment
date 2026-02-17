@@ -111,7 +111,7 @@ export default function Board() {
     setTasksByList((prev) => {
       const newCtx = { ...prev };
       Object.keys(newCtx).forEach(listId => {
-        newCtx[listId] = newCtx[listId].filter(t => t._id !== taskId);
+        newCtx[listId] = newCtx[listId].filter(t => t._id !== (taskId.id || taskId));
       });
       return newCtx;
     });
@@ -128,9 +128,11 @@ export default function Board() {
     fetchHistory();
     socket.emit('joinBoard', id);
 
-    // Socket Listeners
+    // Socket Listeners (support multiple event name variants)
     socket.on('taskCreated', handleTaskCreated);
-    socket.on('taskUpdated', handleTaskUpdated); // Handle single update without reload
+    socket.on('taskUpdated', handleTaskUpdated); // camelCase
+    socket.on('task_updated', handleTaskUpdated); // snake_case
+    socket.on('task_moved', handleTaskUpdated);
     socket.on('taskDeleted', handleTaskDeleted);
     socket.on('listCreated', fetchLists);
     socket.on('activityLog', handleActivityLog);
@@ -138,6 +140,8 @@ export default function Board() {
     return () => {
       socket.off('taskCreated');
       socket.off('taskUpdated');
+      socket.off('task_updated');
+      socket.off('task_moved');
       socket.off('taskDeleted');
       socket.off('listCreated');
       socket.off('activityLog');
@@ -345,7 +349,7 @@ export default function Board() {
                           key={task._id}
                           task={task}
                           index={index}
-                          currentUserId={user?._id}
+                          currentUserId={user?.id || user?._id}
                         />
                       ))}
                       {provided.placeholder}

@@ -73,7 +73,7 @@ export default function Task({ task, index, currentUserId }) {
               snapshot.isDragging
                 ? 'bg-blue-600 border-blue-500 shadow-2xl rotate-2 scale-105 z-50'
                 : isAssignedToMe
-                ? 'bg-emerald-700 border-emerald-400 hover:border-emerald-300 shadow-md'
+                ? 'bg-slate-700 border-emerald-400 ring-2 ring-emerald-400/70 ring-offset-2 ring-offset-slate-900 shadow-[0_0_12px_rgba(16,185,129,0.8)]'
                 : 'bg-slate-700 border-slate-600 hover:border-slate-500 shadow-sm hover:shadow-md'
             }
           `}
