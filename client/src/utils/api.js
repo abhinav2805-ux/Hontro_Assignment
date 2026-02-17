@@ -1,7 +1,11 @@
 import axios from 'axios';
 
+// Prefer environment-based API URL so deployment only requires .env change
+const baseURL =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api', // Matches your backend URL
+  baseURL,
 });
 
 // Automatically add the token to every request if it exists

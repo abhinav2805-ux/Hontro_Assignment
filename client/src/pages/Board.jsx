@@ -6,8 +6,15 @@ import toast from 'react-hot-toast';
 import api from '../utils/api';
 import Task from '../components/Task';
 
-// Initialize socket outside component to prevent multiple connections
-const socket = io('http://localhost:5000');
+// Initialize socket outside component to prevent multiple connections.
+// Uses env so deployment only needs .env change.
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL ||
+  (import.meta.env.VITE_API_BASE_URL
+    ? import.meta.env.VITE_API_BASE_URL.replace(/\/api\/?$/, '')
+    : 'http://localhost:5000');
+
+const socket = io(SOCKET_URL);
 
 export default function Board() {
   const { id } = useParams();
