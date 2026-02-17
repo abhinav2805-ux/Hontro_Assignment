@@ -21,6 +21,10 @@ export default function Board() {
   const [activities, setActivities] = useState([]); // Activity history
   const [searchQuery, setSearchQuery] = useState(''); // Search text
   const [showHistory, setShowHistory] = useState(false); // Toggle sidebar
+  const [page, setPage] = useState(1); // Pagination page
+  const [totalPages, setTotalPages] = useState(1); // Total pages from backend
+
+  const TASKS_PER_PAGE = 10;
 
   const user = (() => {
     try {
@@ -41,9 +45,17 @@ export default function Board() {
   const fetchTasks = async () => {
     try {
       const response = await api.get(
-        `/tasks?boardId=${id}&q=${encodeURIComponent(searchQuery || '')}`
+        `/tasks?boardId=${id}&q=${encodeURIComponent(
+          searchQuery || ''
+        )}&page=${page}&limit=${TASKS_PER_PAGE}`
       );
-      const tasks = response.data.data || response.data;
+      const payload = response.data || {};
+      const tasks = payload.data || payload.tasks || payload;
+
+      if (payload.totalPages) {
+        setTotalPages(payload.totalPages);
+      }
+
       groupTasks(tasks);
     } catch (err) { console.error(err); }
   };
@@ -129,7 +141,8 @@ export default function Board() {
     socket.emit('joinBoard', id);
 
     // Socket Listeners (support multiple event name variants)
-    socket.on('taskCreated', handleTaskCreated);
+    // For creation, refetch to keep pagination counts correct
+    socket.on('taskCreated', () => fetchTasks());
     socket.on('taskUpdated', handleTaskUpdated); // camelCase
     socket.on('task_updated', handleTaskUpdated); // snake_case
     socket.on('task_moved', handleTaskUpdated);
@@ -153,13 +166,18 @@ export default function Board() {
   useEffect(() => {
     fetchTasks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery]);
+  }, [searchQuery, page]);
 
   // --- Drag & Drop Logic ---
   const onDragStart = () => setIsDragging(true);
 
   const onDragEnd = async (result) => {
     setIsDragging(false);
+    // Moving while filtered can create confusing ordering, so require clear search
+    if (searchQuery) {
+      toast.error('Clear search to move tasks');
+      return;
+    }
     const { source, destination, draggableId } = result;
 
     // No valid drop target
@@ -284,14 +302,53 @@ export default function Board() {
             <h1 className="font-bold text-lg tracking-wide text-slate-100">
               Project Board
             </h1>
-            <input
-              type="text"
-              placeholder="Search tasks..."
-              className="bg-slate-900/70 border border-slate-600 rounded px-3 py-1 text-xs md:text-sm text-slate-200 focus:border-blue-500 outline-none transition-colors"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search tasks..."
+                className="bg-slate-900/70 border border-slate-600 rounded-full px-4 py-1.5 text-xs md:text-sm text-slate-200 focus:border-blue-500 outline-none w-56 md:w-64 transition-all focus:w-72 md:focus:w-80"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setPage(1); // reset to first page on new search
+                }}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setPage(1);
+                  }}
+                  className="absolute right-3 top-1.5 text-[10px] md:text-xs text-slate-500 hover:text-white"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           </div>
+        </div>
+        {/* Pagination controls */}
+        <div className="hidden sm:flex items-center gap-3 bg-slate-800/80 rounded-lg px-3 py-1 border border-slate-700/70">
+          <button
+            type="button"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            className="text-xs md:text-sm text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            &lt; Prev
+          </button>
+          <span className="text-xs md:text-sm font-mono text-blue-400">
+            Page {page} of {totalPages || 1}
+          </span>
+          <button
+            type="button"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => p + 1)}
+            className="text-xs md:text-sm text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            Next &gt;
+          </button>
         </div>
         <div className="flex items-center gap-3">
           {user && (
