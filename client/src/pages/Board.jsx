@@ -16,6 +16,7 @@ export default function Board() {
   const [tasksByList, setTasksByList] = useState({});
   const [newListTitle, setNewListTitle] = useState('');
   const [newTaskTitles, setNewTaskTitles] = useState({});
+  const [newTaskPriorities, setNewTaskPriorities] = useState({});
   const [isDragging, setIsDragging] = useState(false); // New: Track dragging state
 
   // Initial Data Fetch
@@ -218,9 +219,11 @@ export default function Board() {
     e.preventDefault();
     const title = newTaskTitles[listId];
     if (!title) return;
+    const priority = newTaskPriorities[listId] || 'Low';
     try {
-      await api.post('/tasks', { title, listId, boardId: id });
+      await api.post('/tasks', { title, listId, boardId: id, priority });
       setNewTaskTitles({ ...newTaskTitles, [listId]: '' });
+      setNewTaskPriorities({ ...newTaskPriorities, [listId]: 'Low' });
     } catch (err) { toast.error('Failed to create task'); }
   };
 
@@ -274,7 +277,7 @@ export default function Board() {
               </Droppable>
 
               {/* Add Task Footer */}
-              <form onSubmit={(e) => createTask(e, list._id)} className="p-3 pt-0">
+              <form onSubmit={(e) => createTask(e, list._id)} className="p-3 pt-0 space-y-2">
                 <input
                   type="text"
                   placeholder="+ Add Task"
@@ -282,6 +285,25 @@ export default function Board() {
                   value={newTaskTitles[list._id] || ''}
                   onChange={(e) => setNewTaskTitles({ ...newTaskTitles, [list._id]: e.target.value })}
                 />
+                <div className="flex items-center gap-2">
+                  <label className="text-[11px] uppercase tracking-wide text-slate-500">
+                    Priority
+                  </label>
+                  <select
+                    className="flex-1 bg-slate-900/60 text-xs text-slate-200 px-2 py-1 rounded-lg border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none cursor-pointer"
+                    value={newTaskPriorities[list._id] || 'Low'}
+                    onChange={(e) =>
+                      setNewTaskPriorities({
+                        ...newTaskPriorities,
+                        [list._id]: e.target.value,
+                      })
+                    }
+                  >
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                  </select>
+                </div>
               </form>
             </div>
           ))}

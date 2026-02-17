@@ -1,4 +1,7 @@
+import { useEffect, useState } from 'react';
 import { Draggable } from '@hello-pangea/dnd';
+import toast from 'react-hot-toast';
+import api from '../utils/api';
 
 const priorityColors = {
   Low: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
@@ -7,6 +10,28 @@ const priorityColors = {
 };
 
 export default function Task({ task, index }) {
+  const [priority, setPriority] = useState(task.priority || 'Low');
+
+  // Keep local state in sync with server/socket updates
+  useEffect(() => {
+    setPriority(task.priority || 'Low');
+  }, [task.priority]);
+
+  const cyclePriority = async () => {
+    const order = ['Low', 'Medium', 'High'];
+    const currentIndex = order.indexOf(priority);
+    const nextPriority = order[(currentIndex + 1) % order.length];
+
+    // Optimistic update
+    setPriority(nextPriority);
+    try {
+      await api.put(`/tasks/${task._id}`, { priority: nextPriority });
+    } catch (err) {
+      toast.error('Failed to update priority');
+      setPriority(priority);
+    }
+  };
+
   return (
     <Draggable draggableId={task._id} index={index}>
       {(provided, snapshot) => (
@@ -38,9 +63,14 @@ export default function Task({ task, index }) {
           )}
 
           <div className="flex justify-between items-center mt-2">
-            <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${priorityColors[task.priority] || priorityColors.Low}`}>
-              {task.priority}
-            </span>
+            <button
+              type="button"
+              onClick={cyclePriority}
+              className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded border ${priorityColors[priority] || priorityColors.Low} transition-colors hover:border-yellow-400/60 hover:text-yellow-300`}
+              title="Click to change priority"
+            >
+              {priority}
+            </button>
             
             {/* Avatars (Placeholder) */}
             {task.assignees && task.assignees.length > 0 && (
