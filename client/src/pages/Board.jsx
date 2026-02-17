@@ -17,27 +17,18 @@ export default function Board() {
   const [newListTitle, setNewListTitle] = useState('');
   const [newTaskTitles, setNewTaskTitles] = useState({});
   const [newTaskPriorities, setNewTaskPriorities] = useState({});
-  const [isDragging, setIsDragging] = useState(false); // New: Track dragging state
+  const [isDragging, setIsDragging] = useState(false); // Track dragging state
+  const [activities, setActivities] = useState([]); // Activity history
+  const [searchQuery, setSearchQuery] = useState(''); // Search text
+  const [showHistory, setShowHistory] = useState(false); // Toggle sidebar
 
-  // Initial Data Fetch
-  useEffect(() => {
-    fetchLists();
-    fetchTasks();
-    socket.emit('joinBoard', id);
-
-    // Socket Listeners
-    socket.on('taskCreated', handleTaskCreated);
-    socket.on('taskUpdated', handleTaskUpdated); // Handle single update without reload
-    socket.on('taskDeleted', handleTaskDeleted);
-    socket.on('listCreated', fetchLists);
-
-    return () => {
-      socket.off('taskCreated');
-      socket.off('taskUpdated');
-      socket.off('taskDeleted');
-      socket.off('listCreated');
-    };
-  }, [id]);
+  const user = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('user'));
+    } catch {
+      return null;
+    }
+  })();
 
   // --- API Helpers ---
   const fetchLists = async () => {
@@ -49,10 +40,21 @@ export default function Board() {
 
   const fetchTasks = async () => {
     try {
-      const response = await api.get(`/tasks?boardId=${id}`);
+      const response = await api.get(
+        `/tasks?boardId=${id}&q=${encodeURIComponent(searchQuery || '')}`
+      );
       const tasks = response.data.data || response.data;
       groupTasks(tasks);
     } catch (err) { console.error(err); }
+  };
+
+  const fetchHistory = async () => {
+    try {
+      const { data } = await api.get(`/activities/${id}`);
+      setActivities(data);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   // Helper to group tasks by listId
@@ -69,8 +71,8 @@ export default function Board() {
     setTasksByList(grouped);
   };
 
-  // --- Socket Handlers (The Fix for "Reloading") ---
-  
+  // --- Socket Handlers (Real‑time updates) ---
+
   // 1. Only add the new task, don't refetch everything
   const handleTaskCreated = (newTask) => {
     setTasksByList((prev) => {
@@ -114,6 +116,40 @@ export default function Board() {
       return newCtx;
     });
   };
+
+  const handleActivityLog = (activity) => {
+    setActivities((prev) => [activity, ...prev].slice(0, 50));
+  };
+
+  // Initial Data Fetch + socket wiring
+  useEffect(() => {
+    fetchLists();
+    fetchTasks();
+    fetchHistory();
+    socket.emit('joinBoard', id);
+
+    // Socket Listeners
+    socket.on('taskCreated', handleTaskCreated);
+    socket.on('taskUpdated', handleTaskUpdated); // Handle single update without reload
+    socket.on('taskDeleted', handleTaskDeleted);
+    socket.on('listCreated', fetchLists);
+    socket.on('activityLog', handleActivityLog);
+
+    return () => {
+      socket.off('taskCreated');
+      socket.off('taskUpdated');
+      socket.off('taskDeleted');
+      socket.off('listCreated');
+      socket.off('activityLog');
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // Refetch tasks whenever search changes
+  useEffect(() => {
+    fetchTasks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery]);
 
   // --- Drag & Drop Logic ---
   const onDragStart = () => setIsDragging(true);
@@ -221,7 +257,12 @@ export default function Board() {
     if (!title) return;
     const priority = newTaskPriorities[listId] || 'Low';
     try {
-      await api.post('/tasks', { title, listId, boardId: id, priority });
+      await api.post('/tasks', {
+        title,
+        listId,
+        boardId: id,
+        priority,
+      });
       setNewTaskTitles({ ...newTaskTitles, [listId]: '' });
       setNewTaskPriorities({ ...newTaskPriorities, [listId]: 'Low' });
     } catch (err) { toast.error('Failed to create task'); }
@@ -229,100 +270,177 @@ export default function Board() {
 
   return (
     <div className="h-screen flex flex-col bg-slate-900 text-white overflow-hidden font-sans">
-      {/* Modern Header */}
+      {/* Header with search + history toggle */}
       <header className="px-6 py-4 bg-slate-800/50 backdrop-blur-md border-b border-slate-700 flex justify-between items-center z-10">
         <div className="flex items-center gap-4">
-          <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold">TM</div>
-          <h1 className="font-bold text-lg tracking-wide text-slate-100">Project Board</h1>
+          <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center font-bold">
+            TM
+          </div>
+          <div className="flex items-center gap-3">
+            <h1 className="font-bold text-lg tracking-wide text-slate-100">
+              Project Board
+            </h1>
+            <input
+              type="text"
+              placeholder="Search tasks..."
+              className="bg-slate-900/70 border border-slate-600 rounded px-3 py-1 text-xs md:text-sm text-slate-200 focus:border-blue-500 outline-none transition-colors"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
         </div>
-        <div className="flex gap-4">
-          <button onClick={() => navigate('/dashboard')} className="text-sm text-slate-400 hover:text-white transition">
+        <div className="flex items-center gap-3">
+          {user && (
+            <span className="text-xs text-slate-400 hidden sm:inline">
+              Logged in as <span className="font-semibold">{user.username}</span>
+            </span>
+          )}
+          <button
+            onClick={() => setShowHistory((s) => !s)}
+            className="text-xs md:text-sm bg-slate-700 px-3 py-1 rounded hover:bg-slate-600 transition"
+          >
+            {showHistory ? 'Close History' : 'Activity Log'}
+          </button>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="text-sm text-slate-400 hover:text-white transition"
+          >
             Exit Board
           </button>
         </div>
       </header>
 
-      {/* Board Canvas */}
-      <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
+      <div className="flex flex-1 overflow-hidden">
+        {/* Board Canvas */}
         <div className="flex-1 overflow-x-auto overflow-y-hidden p-6 flex items-start gap-6">
-          
-          {/* Render Lists */}
-          {lists.map(list => (
-            <div key={list._id} className="w-80 flex-shrink-0 bg-slate-800/80 rounded-xl border border-slate-700/50 shadow-xl flex flex-col max-h-full transition-colors hover:border-slate-600">
-              
-              {/* List Header */}
-              <div className="p-4 border-b border-slate-700/50 flex justify-between items-center">
-                <h3 className="font-bold text-slate-200 text-sm uppercase tracking-wider">{list.title}</h3>
-                <span className="text-xs text-slate-500 font-mono bg-slate-900 px-2 py-0.5 rounded-full">
-                  {(tasksByList[list._id] || []).length}
-                </span>
-              </div>
+          <DragDropContext onDragStart={onDragStart} onDragEnd={onDragEnd}>
+            {/* Render Lists */}
+            {lists.map((list) => (
+              <div
+                key={list._id}
+                className="w-80 flex-shrink-0 bg-slate-800/80 rounded-xl border border-slate-700/50 shadow-xl flex flex-col max-h-full transition-colors hover:border-slate-600"
+              >
+                {/* List Header */}
+                <div className="p-4 border-b border-slate-700/50 flex justify-between items-center">
+                  <h3 className="font-bold text-slate-200 text-sm uppercase tracking-wider">
+                    {list.title}
+                  </h3>
+                  <span className="text-xs text-slate-500 font-mono bg-slate-900 px-2 py-0.5 rounded-full">
+                    {(tasksByList[list._id] || []).length}
+                  </span>
+                </div>
 
-              {/* Tasks Area */}
-              <Droppable droppableId={list._id}>
-                {(provided, snapshot) => (
-                  <div
-                    {...provided.droppableProps}
-                    ref={provided.innerRef}
-                    className={`p-3 flex-1 overflow-y-auto min-h-[100px] transition-colors ${
-                      snapshot.isDraggingOver ? 'bg-slate-700/30' : ''
-                    }`}
-                  >
-                    {(tasksByList[list._id] || []).map((task, index) => (
-                      <Task key={task._id} task={task} index={index} />
-                    ))}
-                    {provided.placeholder}
-                  </div>
-                )}
-              </Droppable>
+                {/* Tasks Area */}
+                <Droppable droppableId={list._id}>
+                  {(provided, snapshot) => (
+                    <div
+                      {...provided.droppableProps}
+                      ref={provided.innerRef}
+                      className={`p-3 flex-1 overflow-y-auto min-h-[100px] transition-colors ${
+                        snapshot.isDraggingOver ? 'bg-slate-700/30' : ''
+                      }`}
+                    >
+                      {(tasksByList[list._id] || []).map((task, index) => (
+                        <Task
+                          key={task._id}
+                          task={task}
+                          index={index}
+                          currentUserId={user?._id}
+                        />
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
 
-              {/* Add Task Footer */}
-              <form onSubmit={(e) => createTask(e, list._id)} className="p-3 pt-0 space-y-2">
-                <input
-                  type="text"
-                  placeholder="+ Add Task"
-                  className="w-full bg-slate-900/50 text-sm text-slate-300 p-2 rounded-lg border border-transparent hover:border-slate-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-600"
-                  value={newTaskTitles[list._id] || ''}
-                  onChange={(e) => setNewTaskTitles({ ...newTaskTitles, [list._id]: e.target.value })}
-                />
-                <div className="flex items-center gap-2">
-                  <label className="text-[11px] uppercase tracking-wide text-slate-500">
-                    Priority
-                  </label>
-                  <select
-                    className="flex-1 bg-slate-900/60 text-xs text-slate-200 px-2 py-1 rounded-lg border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none cursor-pointer"
-                    value={newTaskPriorities[list._id] || 'Low'}
+                {/* Add Task Footer */}
+                <form
+                  onSubmit={(e) => createTask(e, list._id)}
+                  className="p-3 pt-0 space-y-2"
+                >
+                  <input
+                    type="text"
+                    placeholder="+ Add Task"
+                    className="w-full bg-slate-900/50 text-sm text-slate-300 p-2 rounded-lg border border-transparent hover:border-slate-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-600"
+                    value={newTaskTitles[list._id] || ''}
                     onChange={(e) =>
-                      setNewTaskPriorities({
-                        ...newTaskPriorities,
+                      setNewTaskTitles({
+                        ...newTaskTitles,
                         [list._id]: e.target.value,
                       })
                     }
-                  >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                  </select>
-                </div>
+                  />
+                  <div className="flex items-center gap-2">
+                    <label className="text-[11px] uppercase tracking-wide text-slate-500">
+                      Priority
+                    </label>
+                    <select
+                      className="flex-1 bg-slate-900/60 text-xs text-slate-200 px-2 py-1 rounded-lg border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none cursor-pointer"
+                      value={newTaskPriorities[list._id] || 'Low'}
+                      onChange={(e) =>
+                        setNewTaskPriorities({
+                          ...newTaskPriorities,
+                          [list._id]: e.target.value,
+                        })
+                      }
+                    >
+                      <option value="Low">Low</option>
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                    </select>
+                  </div>
+                </form>
+              </div>
+            ))}
+
+            {/* New List Button */}
+            <div className="w-80 flex-shrink-0">
+              <form
+                onSubmit={createList}
+                className="bg-slate-800/40 p-3 rounded-xl border border-dashed border-slate-700 hover:border-blue-500/50 hover:bg-slate-800 transition-all cursor-pointer"
+              >
+                <input
+                  type="text"
+                  placeholder="+ Add another list"
+                  className="w-full bg-transparent text-slate-300 p-2 outline-none placeholder:text-slate-500"
+                  value={newListTitle}
+                  onChange={(e) => setNewListTitle(e.target.value)}
+                />
               </form>
             </div>
-          ))}
-
-          {/* New List Button */}
-          <div className="w-80 flex-shrink-0">
-            <form onSubmit={createList} className="bg-slate-800/40 p-3 rounded-xl border border-dashed border-slate-700 hover:border-blue-500/50 hover:bg-slate-800 transition-all cursor-pointer">
-              <input
-                type="text"
-                placeholder="+ Add another list"
-                className="w-full bg-transparent text-slate-300 p-2 outline-none placeholder:text-slate-500"
-                value={newListTitle}
-                onChange={(e) => setNewListTitle(e.target.value)}
-              />
-            </form>
-          </div>
-
+          </DragDropContext>
         </div>
-      </DragDropContext>
+
+        {/* Activity History Sidebar */}
+        {showHistory && (
+          <div className="w-80 bg-slate-800 border-l border-slate-700 p-4 overflow-y-auto shadow-2xl z-20 transition-all">
+            <h3 className="font-bold text-lg mb-4 border-b border-slate-600 pb-2">
+              Activity History
+            </h3>
+            <div className="space-y-3 text-sm">
+              {activities.map((act) => (
+                <div
+                  key={act._id || `${act.username}-${act.action}-${act.createdAt}`}
+                  className="text-slate-200"
+                >
+                  <span className="font-semibold text-blue-400">
+                    {act.username || 'Someone'}
+                  </span>
+                  <span className="text-slate-400"> {act.action}</span>
+                  {act.createdAt && (
+                    <div className="text-xs text-slate-500 mt-1">
+                      {new Date(act.createdAt).toLocaleString()}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {activities.length === 0 && (
+                <p className="text-slate-500 text-sm">No recent activity.</p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

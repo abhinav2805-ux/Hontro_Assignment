@@ -15,7 +15,10 @@ router.post('/', async (req, res) => {
     if (!title || !boardId) {
       return res.status(400).json({ message: 'Title and boardId are required.' });
     }
-    const board = await Board.findOne({ _id: boardId, userId: req.userId });
+    const board = await Board.findOne({
+      _id: boardId,
+      $or: [{ userId: req.userId }, { collaborators: req.userId }],
+    });
     if (!board) {
       return res.status(404).json({ message: 'Board not found.' });
     }
@@ -38,7 +41,10 @@ router.get('/', async (req, res) => {
     if (!boardId) {
       return res.status(400).json({ message: 'boardId query is required.' });
     }
-    const board = await Board.findOne({ _id: boardId, userId: req.userId });
+    const board = await Board.findOne({
+      _id: boardId,
+      $or: [{ userId: req.userId }, { collaborators: req.userId }],
+    });
     if (!board) {
       return res.status(404).json({ message: 'Board not found.' });
     }
@@ -54,7 +60,10 @@ router.get('/:id', async (req, res) => {
   try {
     const list = await List.findById(req.params.id);
     if (!list) return res.status(404).json({ message: 'List not found.' });
-    const board = await Board.findOne({ _id: list.boardId, userId: req.userId });
+    const board = await Board.findOne({
+      _id: list.boardId,
+      $or: [{ userId: req.userId }, { collaborators: req.userId }],
+    });
     if (!board) return res.status(404).json({ message: 'Board not found.' });
     res.json(list);
   } catch (err) {
@@ -67,7 +76,10 @@ router.put('/:id', async (req, res) => {
   try {
     const list = await List.findById(req.params.id);
     if (!list) return res.status(404).json({ message: 'List not found.' });
-    const board = await Board.findOne({ _id: list.boardId, userId: req.userId });
+    const board = await Board.findOne({
+      _id: list.boardId,
+      $or: [{ userId: req.userId }, { collaborators: req.userId }],
+    });
     if (!board) return res.status(404).json({ message: 'Board not found.' });
     Object.assign(list, req.body);
     await list.save();

@@ -10,6 +10,7 @@ const boardRoutes = require('./routes/boards');
 const listRoutes = require('./routes/lists');
 const taskRoutes = require('./routes/tasks');
 const activityRoutes = require('./routes/activity');
+const activitiesRoutes = require('./routes/activities');
 
 const app = express();
 const server = http.createServer(app);
@@ -66,6 +67,7 @@ app.use('/api/boards', boardRoutes);
 app.use('/api/lists', listRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/activity', activityRoutes);
+app.use('/api/activities', activitiesRoutes);
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

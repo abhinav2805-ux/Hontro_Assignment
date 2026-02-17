@@ -26,7 +26,9 @@ router.post('/', async (req, res) => {
 // GET /boards - Get all boards for the current user
 router.get('/', async (req, res) => {
   try {
-    const boards = await Board.find({ userId: req.userId }).sort({ createdAt: -1 });
+    const boards = await Board.find({
+      $or: [{ userId: req.userId }, { collaborators: req.userId }],
+    }).sort({ createdAt: -1 });
     res.json(boards);
   } catch (err) {
     res.status(500).json({ message: 'Server error.', error: err.message });
@@ -36,7 +38,10 @@ router.get('/', async (req, res) => {
 // GET /boards/:id - Get single board with lists and tasks
 router.get('/:id', async (req, res) => {
   try {
-    const board = await Board.findOne({ _id: req.params.id, userId: req.userId });
+    const board = await Board.findOne({
+      _id: req.params.id,
+      $or: [{ userId: req.userId }, { collaborators: req.userId }],
+    });
     if (!board) {
       return res.status(404).json({ message: 'Board not found.' });
     }
